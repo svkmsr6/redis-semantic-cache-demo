@@ -24,8 +24,8 @@ A comprehensive web application demonstrating semantic caching capabilities usin
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/svkmsr6/redis-semantic-cache.git
-   cd redis-semantic-cache
+   git clone https://github.com/svkmsr6/redis-semantic-cache-demo.git
+   cd redis-semantic-cache-demo
    ```
 
 2. **Create and activate virtual environment**:
@@ -189,7 +189,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 If you encounter any issues or have questions:
 1. Check the troubleshooting section above
-2. Review the [issues](https://github.com/svkmsr6/redis-semantic-cache/issues) page
+2. Review the [issues](https://github.com/svkmsr6/redis-semantic-cache-demo/issues) page
 3. Create a new issue with detailed information
 
 ---
