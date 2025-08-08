@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redis Semantic Cache Demo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
+    <style>
+        .demo-card {
+            transition: transform 0.2s;
+            border: 1px solid #dee2e6;
+        }
+        .demo-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .cache-hit {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .cache-miss {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .time-badge {
+            font-family: 'Courier New', monospace;
+        }
+        .spinner-border-sm {
+            width: 1rem;
+            height: 1rem;
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-ok { background-color: #28a745; }
+        .status-error { background-color: #dc3545; }
+        .status-warning { background-color: #ffc107; }
+        .performance-metrics {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .query-history {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container py-4">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col">
+                <h1 class="display-4 text-center">
+                    <i class="fas fa-database text-danger"></i>
+                    Redis Semantic Cache Demo
+                </h1>
+                <p class="lead text-center text-muted">
+                    Experience the power of semantic caching with Redis and OpenAI
+                </p>
+                
+                <!-- Status Indicator -->
+                <div class="alert alert-info text-center" id="statusAlert">
+                    <span id="statusIndicator" class="status-indicator status-warning"></span>
+                    <span id="statusText">Checking API status...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Demo Cards -->
+        <div class="row mb-4">
+            <!-- Single Query Card -->
+            <div class="col-md-4 mb-3">
+                <div class="card demo-card h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-search"></i> Single Query
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">Test individual queries and see caching in action.</p>
+                        <div class="mb-3">
+                            <textarea class="form-control" id="singleQuery" rows="3" 
+                                    placeholder="Enter your query here...">What is semantic caching in Redis Cloud?</textarea>
+                        </div>
+                        <button class="btn btn-primary w-100" onclick="runSingleQuery()">
+                            <span id="singleQuerySpinner" class="spinner-border spinner-border-sm d-none"></span>
+                            Execute Query
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Caching Demo Card -->
+            <div class="col-md-4 mb-3">
+                <div class="card demo-card h-100">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-sync-alt"></i> Caching Demo
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">Run the same query twice to demonstrate cache performance.</p>
+                        <div class="mb-3">
+                            <input type="text" class="form-control" id="cachingQuery" 
+                                   value="What is semantic caching in Redis Cloud?" 
+                                   placeholder="Query for caching demo">
+                        </div>
+                        <button class="btn btn-success w-100" onclick="runCachingDemo()">
+                            <span id="cachingSpinner" class="spinner-border spinner-border-sm d-none"></span>
+                            Run Caching Demo
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Similarity Demo Card -->
+            <div class="col-md-4 mb-3">
+                <div class="card demo-card h-100">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="card-title mb-0">
+                            <i class="fas fa-lightbulb"></i> Similarity Demo
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">Test semantically similar queries to see cache effectiveness.</p>
+                        <button class="btn btn-info w-100 mb-2" onclick="runSimilarityDemo()">
+                            <span id="similaritySpinner" class="spinner-border spinner-border-sm d-none"></span>
+                            Run Similarity Demo
+                        </button>
+                        <button class="btn btn-outline-info w-100" onclick="showCustomSimilarityModal()">
+                            Custom Queries
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="row">
+            <div class="col">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-chart-line"></i> Results</h5>
+                        <div>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="loadHistory()">
+                                <i class="fas fa-history"></i> Refresh
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="clearHistory()">
+                                <i class="fas fa-trash"></i> Clear
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="resultsContainer">
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-info-circle fa-2x"></i>
+                                <p class="mt-2">No queries executed yet. Try one of the demos above!</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Similarity Modal -->
+    <div class="modal fade" id="customSimilarityModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Custom Similarity Queries</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Enter multiple queries that are semantically similar to test caching effectiveness:</p>
+                    <div id="customQueriesContainer">
+                        <div class="mb-2">
+                            <input type="text" class="form-control" placeholder="Query 1" value="How does Redis semantic cache work?">
+                        </div>
+                        <div class="mb-2">
+                            <input type="text" class="form-control" placeholder="Query 2" value="What is the mechanism behind Redis semantic caching?">
+                        </div>
+                        <div class="mb-2">
+                            <input type="text" class="form-control" placeholder="Query 3" value="Explain Redis semantic caching functionality">
+                        </div>
+                    </div>
+                    <button class="btn btn-outline-primary btn-sm" onclick="addCustomQuery()">
+                        <i class="fas fa-plus"></i> Add Query
+                    </button>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-info" onclick="runCustomSimilarityDemo()">
+                        <span id="customSimilaritySpinner" class="spinner-border spinner-border-sm d-none"></span>
+                        Run Custom Demo
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Global variables
+        let queryHistory = [];
+        let customSimilarityModal;
+
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', function() {
+            customSimilarityModal = new bootstrap.Modal(document.getElementById('customSimilarityModal'));
+            checkApiStatus();
+            loadHistory();
+        });
+
+        // Check API status
+        async function checkApiStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                const indicator = document.getElementById('statusIndicator');
+                const text = document.getElementById('statusText');
+                const alert = document.getElementById('statusAlert');
+                
+                if (data.status === 'ok') {
+                    indicator.className = 'status-indicator status-ok';
+                    text.textContent = 'OpenAI API is ready';
+                    alert.className = 'alert alert-success text-center';
+                } else if (data.status === 'quota_exceeded') {
+                    indicator.className = 'status-indicator status-error';
+                    text.innerHTML = `Quota exceeded. <a href="${data.action_url}" target="_blank">Check billing</a>`;
+                    alert.className = 'alert alert-warning text-center';
+                } else {
+                    indicator.className = 'status-indicator status-error';
+                    text.textContent = data.message || 'API error';
+                    alert.className = 'alert alert-danger text-center';
+                }
+            } catch (error) {
+                console.error('Status check error:', error);
+                document.getElementById('statusIndicator').className = 'status-indicator status-error';
+                document.getElementById('statusText').textContent = 'Status check failed';
+                document.getElementById('statusAlert').className = 'alert alert-danger text-center';
+            }
+        }
+
+        // Run single query
+        async function runSingleQuery() {
+            const query = document.getElementById('singleQuery').value.trim();
+            if (!query) {
+                alert('Please enter a query');
+                return;
+            }
+
+            const spinner = document.getElementById('singleQuerySpinner');
+            const button = event.target;
+            
+            try {
+                spinner.classList.remove('d-none');
+                button.disabled = true;
+                
+                const response = await fetch('/api/query', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    await loadHistory();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                alert('Request failed: ' + error.message);
+            } finally {
+                spinner.classList.add('d-none');
+                button.disabled = false;
+            }
+        }
+
+        // Run caching demo
+        async function runCachingDemo() {
+            const query = document.getElementById('cachingQuery').value.trim();
+            if (!query) {
+                alert('Please enter a query');
+                return;
+            }
+
+            const spinner = document.getElementById('cachingSpinner');
+            const button = event.target;
+            
+            try {
+                spinner.classList.remove('d-none');
+                button.disabled = true;
+                
+                const response = await fetch('/api/demo/caching', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    displayCachingResults(data.data);
+                    await loadHistory();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                alert('Request failed: ' + error.message);
+            } finally {
+                spinner.classList.add('d-none');
+                button.disabled = false;
+            }
+        }
+
+        // Run similarity demo
+        async function runSimilarityDemo() {
+            const spinner = document.getElementById('similaritySpinner');
+            const button = event.target;
+            
+            try {
+                spinner.classList.remove('d-none');
+                button.disabled = true;
+                
+                const response = await fetch('/api/demo/similarity', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    await loadHistory();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                alert('Request failed: ' + error.message);
+            } finally {
+                spinner.classList.add('d-none');
+                button.disabled = false;
+            }
+        }
+
+        // Show custom similarity modal
+        function showCustomSimilarityModal() {
+            customSimilarityModal.show();
+        }
+
+        // Add custom query input
+        function addCustomQuery() {
+            const container = document.getElementById('customQueriesContainer');
+            const count = container.children.length + 1;
+            const div = document.createElement('div');
+            div.className = 'mb-2';
+            div.innerHTML = `<input type="text" class="form-control" placeholder="Query ${count}">`;
+            container.appendChild(div);
+        }
+
+        // Run custom similarity demo
+        async function runCustomSimilarityDemo() {
+            const inputs = document.querySelectorAll('#customQueriesContainer input');
+            const queries = Array.from(inputs)
+                .map(input => input.value.trim())
+                .filter(query => query.length > 0);
+            
+            if (queries.length === 0) {
+                alert('Please enter at least one query');
+                return;
+            }
+
+            const spinner = document.getElementById('customSimilaritySpinner');
+            const button = event.target;
+            
+            try {
+                spinner.classList.remove('d-none');
+                button.disabled = true;
+                
+                const response = await fetch('/api/demo/similarity', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ queries: queries })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    customSimilarityModal.hide();
+                    await loadHistory();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                alert('Request failed: ' + error.message);
+            } finally {
+                spinner.classList.add('d-none');
+                button.disabled = false;
+            }
+        }
+
+        // Load query history
+        async function loadHistory() {
+            try {
+                const response = await fetch('/api/history');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    queryHistory = data.data;
+                    displayHistory();
+                }
+            } catch (error) {
+                console.error('Failed to load history:', error);
+            }
+        }
+
+        // Clear history
+        async function clearHistory() {
+            if (!confirm('Are you sure you want to clear the query history?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/history/clear', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    queryHistory = [];
+                    displayHistory();
+                }
+            } catch (error) {
+                alert('Failed to clear history: ' + error.message);
+            }
+        }
+
+        // Display caching results with performance metrics
+        function displayCachingResults(data) {
+            const performance = data.performance;
+            const container = document.getElementById('resultsContainer');
+            
+            let html = `
+                <div class="performance-metrics">
+                    <h5><i class="fas fa-tachometer-alt"></i> Performance Analysis</h5>
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <h6>First Query</h6>
+                            <span class="badge badge-light time-badge">${performance.first_time.toFixed(2)}s</span>
+                        </div>
+                        <div class="col-md-3">
+                            <h6>Second Query</h6>
+                            <span class="badge badge-light time-badge">${performance.second_time.toFixed(2)}s</span>
+                        </div>
+                        <div class="col-md-3">
+                            <h6>Speedup</h6>
+                            <span class="badge badge-light">${performance.speedup.toFixed(1)}x</span>
+                        </div>
+                        <div class="col-md-3">
+                            <h6>Time Saved</h6>
+                            <span class="badge badge-light">${performance.time_saved.toFixed(2)}s</span>
+                        </div>
+                    </div>
+                    ${performance.significant_speedup ? 
+                        '<div class="alert alert-success mt-3 mb-0"><i class="fas fa-rocket"></i> Significant speedup detected! Cache is working effectively.</div>' :
+                        '<div class="alert alert-info mt-3 mb-0"><i class="fas fa-info-circle"></i> No significant speedup detected. Cache might not have been used.</div>'
+                    }
+                </div>
+            `;
+            
+            container.innerHTML = html;
+            
+            // Scroll to results and refresh history to show latest queries with accordion
+            container.scrollIntoView({ behavior: 'smooth' });
+            setTimeout(() => {
+                loadHistory();
+            }, 1000);
+        }
+
+        // Display query history
+        function displayHistory() {
+            const container = document.getElementById('resultsContainer');
+            
+            if (queryHistory.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-info-circle fa-2x"></i>
+                        <p class="mt-2">No queries executed yet. Try one of the demos above!</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const reversedHistory = [...queryHistory].reverse();
+            
+            let html = '<div class="query-history">';
+            
+            reversedHistory.forEach(entry => {
+                const cacheStatus = entry.is_cache_hit ? 
+                    '<span class="cache-hit"><i class="fas fa-check-circle"></i> Cache Hit</span>' :
+                    '<span class="cache-miss"><i class="fas fa-times-circle"></i> Cache Miss</span>';
+                
+                // Format the result text with proper line breaks and spacing
+                const formattedResult = entry.result
+                    .replace(/\n/g, '<br>')
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>');
+                
+                html += `
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>Query #${entry.id}</strong>
+                                <small class="text-muted ms-2">${entry.timestamp}</small>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <span class="badge bg-primary time-badge me-2">${entry.time.toFixed(2)}s</span>
+                                ${cacheStatus}
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="accordion" id="accordion-${entry.id}">
+                                <div class="accordion-item border-0">
+                                    <h6 class="accordion-header" id="heading-${entry.id}">
+                                        <button class="accordion-button collapsed bg-light" type="button" 
+                                                data-bs-toggle="collapse" data-bs-target="#collapse-${entry.id}" 
+                                                aria-expanded="false" aria-controls="collapse-${entry.id}">
+                                            <i class="fas fa-question-circle me-2 text-primary"></i>
+                                            ${entry.query}
+                                        </button>
+                                    </h6>
+                                    <div id="collapse-${entry.id}" class="accordion-collapse collapse" 
+                                         aria-labelledby="heading-${entry.id}" data-bs-parent="#accordion-${entry.id}">
+                                        <div class="accordion-body">
+                                            <div class="response-content">
+                                                <i class="fas fa-robot me-2 text-success"></i>
+                                                <span class="fw-bold text-success">AI Response:</span>
+                                                <div class="mt-2 response-text">
+                                                    ${formattedResult}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            container.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
