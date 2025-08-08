@@ -258,5 +258,11 @@ def api_clear_history():
 if __name__ == '__main__':
     print("🚀 Starting Redis Semantic Cache Web Demo")
     print("📁 Make sure your .env file contains RDS_URI and OPENAI_API_KEY")
-    print("🌐 Open http://localhost:5000 in your browser")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    print("🌐 Application will be available at the provided Replit URL")
+    
+    # Get port from environment (Replit sets this)
+    import os
+    port = int(os.environ.get('PORT', 5000))
+    
+    # Run with host 0.0.0.0 for Replit compatibility
+    app.run(debug=True, host='0.0.0.0', port=port)
